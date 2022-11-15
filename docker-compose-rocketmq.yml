@@ -1,0 +1,89 @@
+version: '3'
+services:
+  #Service for nameserver
+  rmqnamesrv:
+    image: apache/rocketmq
+    container_name: rmqnamesrv
+    ports:
+      - 9876:9876
+    volumes:
+      - rocketmqnslog:/home/rocketmq/logs
+    command: sh mqnamesrv
+    networks:
+      - localdev
+
+  #Service for broker
+  rmqbroker:
+    image: apache/rocketmq:4.9.2
+    container_name: rmqbroker
+    # links:
+    #   - rmqnamesrv
+    ports:
+      - 10909:10909
+      - 10911:10911
+      - 10912:10912
+    environment:
+      NAMESRV_ADDR: "rmqnamesrv:9876"
+      JAVA_OPTS: " -Duser.home=/opt"
+      JAVA_OPT_EXT: "-server -Xms128m -Xmx128m -Xmn128m"
+    volumes:
+      - ./rocketmq/broker/data/logs:/home/rocketmq/logs
+      - ./rocketmq/broker/data/store:/home/rocketmq/store # volume  mac权限问题暂时使用此种方式
+      - ./rocketmq/broker/broker.conf:/opt/rocketmq-4.9.2/conf/broker.conf:ro
+    command: sh mqbroker autoCreateTopicEnable=true -c /opt/rocketmq-4.9.2/conf/broker.conf
+    # command: "tail -f /dev/null"
+    depends_on:
+      - rmqnamesrv
+    networks:
+      - localdev
+  
+  rmqconsole:
+    image: styletang/rocketmq-console-ng
+    container_name: rocketmq-console
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - rmqnamesrv
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - rocketmqconsolelog:/root/logs
+    environment:
+      JAVA_OPTS: "-Drocketmq.namesrv.addr=rmqnamesrv:9876 -Dcom.rocketmq.sendMessageWithVIPChannel=false"
+    networks:
+      - localdev
+
+  #Service for another broker -- broker1
+  # broker1:
+  #   image: apache/rocketmq:ROCKETMQ_VERSION
+  #   container_name: rmqbroker-b
+  #   links:
+  #     - namesrv
+  #   ports:
+  #     - 10929:10909
+  #     - 10931:10911
+  #     - 10932:10912
+  #   environment:
+  #     - NAMESRV_ADDR=namesrv:9876
+  #   volumes:
+  #     - ./rocketmq/broker/data1/logs:/home/rocketmq/logs
+  #     - ./rocketmq/broker/data1/store:/home/rocketmq/store
+  #     - ./rocketmq/broker/conf/broker.conf:/opt/rocketmq-ROCKETMQ_VERSION/conf/broker.conf
+  #   command: sh mqbroker -c /opt/rocketmq-ROCKETMQ_VERSION/conf/broker.conf
+
+
+volumes:
+  # rocketmqdata:
+  #   driver: local
+  # rocketmqlog:
+  #   driver: local
+  rocketmqnslog:
+    driver: local
+  rocketmqconsolelog:
+    driver: local
+
+networks:
+  localdev:
+    name: localdev
+    driver: bridge
+    external: true
